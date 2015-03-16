@@ -229,8 +229,6 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
-ShaderAutoGen/GS.h
-ShaderAutoGen/PS.h
-ShaderAutoGen/VS_Uninstanced.h
-ShaderAutoGen/VS_WithGS.h
-ShaderAutoGen/VS_WithoutGS.h
+
+#Auto-generated shader headers
+shaderautogen/*
