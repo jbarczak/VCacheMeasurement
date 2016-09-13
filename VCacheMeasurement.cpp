@@ -14,11 +14,15 @@
 #include "BufferStreamer.h"
 
 
-float MeasureACMR_FIFO( uint nCacheSize, const uint* pIndices, uint nIndices )
+float MeasureACMR_FIFO( uint nCacheSize, const uint* pIndices, uint nIndices, uint* pShadeCounts )
 {
     uint* pCache = new uint[nCacheSize];
     for( uint i=0; i<nCacheSize; i++ )
+    {
         pCache[i] = 0xffffffff;
+        pShadeCounts[i] = 0;
+    }
+
 
     uint nMissCount=0;
     for( uint i=0; i<nIndices; i++ )
@@ -33,6 +37,7 @@ float MeasureACMR_FIFO( uint nCacheSize, const uint* pIndices, uint nIndices )
         
         // miss
         pCache[nMissCount%nCacheSize] = idx;
+        pShadeCounts[idx]++;
         nMissCount++;
     }
 
@@ -90,6 +95,7 @@ public:
     Simpleton::DX11PipelineResourceSet m_MeasureResources;
     Simpleton::DX11PipelineResourceSet m_ShowResources;
 
+    std::vector<uint> m_SimulatedHitCounts;
     
     CounterBuffer m_CounterBuff;
     BufferStreamer m_Streamer;
@@ -97,6 +103,7 @@ public:
     virtual bool OnCreate( Simpleton::DX11Window* pWindow ) 
     {
         Simpleton::PlyMesh mesh;
+        printf("Loading mesh....\n");
         Simpleton::LoadPly( "dragon_vrip.ply", mesh, 
                             Simpleton::PF_STANDARDIZE_POSITIONS|
                             Simpleton::PF_IGNORE_COLORS|
@@ -105,9 +112,10 @@ public:
 
         m_Mesh.InitFromPly( pWindow->GetDevice(),mesh );
 
-        //for( uint i=48; i<64; i++ )
+        
         {
-            float f0 = MeasureACMR_FIFO(128,mesh.pVertexIndices, mesh.nTriangles*3 );
+            m_SimulatedHitCounts.resize( mesh.nVertices );
+            float f0 = MeasureACMR_FIFO(128,mesh.pVertexIndices, mesh.nTriangles*3, m_SimulatedHitCounts.data() );
             printf("Cachesize: %u.  FIFO acmr: %f \n", 128,f0);
         }
 
@@ -202,8 +210,8 @@ public:
         m_Streamer.QueueReadback(pCtx);
         if( m_Streamer.Poll(pCtx) )
         {
+            // display measured acmr in window title
             const uint* pCounts = (const uint*) m_Streamer.GetHostBuffer();
-            
             uint nVerts = m_CounterBuff.GetCounterCount();
             uint nSum=0;
             for( uint i=0; i<nVerts; i++ )
@@ -214,6 +222,11 @@ public:
             char text[2048];
             sprintf( text, "acmr: %f", acmr);
             pWindow->SetCaption( text );
+
+            // see if measured invocation counts match simulated ones
+            for( size_t i=0; i<m_SimulatedHitCounts.size(); i++ )
+                if( m_SimulatedHitCounts[i] != pCounts[i] )
+                    printf("Hit counts do not match\n");
         }
     }
 };
